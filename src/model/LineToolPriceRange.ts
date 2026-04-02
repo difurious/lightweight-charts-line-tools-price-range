@@ -37,6 +37,8 @@ import {
 	CompositeRenderer,
 	interpolateLogicalIndexFromTime,
 	interpolateTimeFromLogicalIndex,
+	getToolCullingState,
+	OffScreenState,
 } from 'lightweight-charts-line-tools-core';
 
 import { LineToolPriceRangePaneView } from '../views/LineToolPriceRangePaneView';
@@ -526,4 +528,54 @@ export class LineToolPriceRange<HorzScaleItem> extends BaseLineTool<HorzScaleIte
 		// The Pane View's renderer is a CompositeRenderer, which delegates the hit-test
 		return compositeRenderer.hitTest(x, y);
 	}
+
+	/**
+	 * Calculates the Price Range tool's visibility based on its 2D area.
+	 * 
+	 * ### Tutorial Note on Price Range Area Culling
+	 * A Price Range tool consists of a background fill and several lines. 
+	 * To prevent the visual components from disappearing when the user 
+	 * zooms into the middle of the range (where the top and bottom borders 
+	 * are off-screen), we use the core's Area-Based culling mode.
+	 * 
+	 * 1. We provide the 2 logical anchor points (P0 and P1).
+	 * 2. We provide the 'extend' options found in the nested rectangle configuration.
+	 * 3. We set 'isAreaBased' to true.
+	 * 
+	 * This instructs the culling engine to treat the tool as a solid zone. 
+	 * As long as the viewport overlaps any part of the rectangle (including 
+	 * the infinite horizontal extensions), the tool remains visible.
+	 * 
+	 * @protected
+	 * @override
+	 */
+	protected override updateCullingState(): void {
+		const points = this.points();
+		const options = this.options();
+
+		// 1. Guard: Skip culling during interaction to prevent visual flickering.
+		if (points.length < this.pointsCount || this.isCreating() || this.isEditing()) {
+			this._setIsCulled(false);
+			return;
+		}
+
+		// --- AREA-BASED CULLING START ---
+
+		// 2. Invoke the Core Culler in Area-Based mode.
+		// We pass the extension flags from the rectangle sub-options.
+		const cullingState = getToolCullingState(
+			points, 
+			this, 
+			options.priceRange.rectangle.extend, 
+			undefined, 
+			undefined, 
+			true // isAreaBased: true
+		);
+
+		// Set the internal flag: tool is culled if the core returns any state other than 'Visible'
+		this._setIsCulled(cullingState !== OffScreenState.Visible);
+
+		// --- AREA-BASED CULLING END ---
+	}
+
 }

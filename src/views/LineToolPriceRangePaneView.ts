@@ -13,8 +13,6 @@ import {
 	LineToolPaneView,
 	CompositeRenderer,
 	AnchorPoint,
-	OffScreenState,
-	getToolCullingState,
 	LineToolOptionsInternal,
 	TextRenderer,
 	RectangleRenderer,
@@ -28,7 +26,6 @@ import {
 	LineOptions,
 	TextRendererData,
 	LineToolPoint,
-	LineToolCullingInfo,
 	ensureNotNull
 } from 'lightweight-charts-line-tools-core';
 
@@ -113,6 +110,18 @@ export class LineToolPriceRangePaneView<HorzScaleItem> extends LineToolPaneView<
 			return;
 		}
 
+		/**
+		 * CULLING CHECK
+		 * 
+		 * We query the Model's pre-calculated state. This ensures that the 
+		 * Price Range remains visible even if its vertices are off-screen, 
+		 * provided the viewport is inside the 'Zone of Influence'.
+		 */
+		if (this._tool.isCulled()) {
+			//console.log('price range culled')
+			return;
+		}		
+
 		// 1. Coordinate Conversion
 		const hasScreenPoints = this._updatePoints();
 		if (!hasScreenPoints || this._points.length < tool.pointsCount) {
@@ -132,98 +141,7 @@ export class LineToolPriceRangePaneView<HorzScaleItem> extends LineToolPaneView<
 		const topLeftScreen = new AnchorPoint(minX, minY, 0);
 		const bottomRightScreen = new AnchorPoint(maxX, maxY, 1);
 		
-		// --- CULLING CHECK (Using Sub-Segment Strategy) ---
-		// The culling function relies on the logical points, so we pull those directly.
-		const P0_cull = this._tool.getPoint(0)!;
-		const P1_cull = this._tool.getPoint(1)!;
-
-		if(P0_cull && P1_cull && this._points.length >= this._tool.pointsCount && !this._tool.isCreating() && !this._tool.isEditing()){
-			
-			// --- 1. Calculate the Four Geometric Corner Points (Logical) ---
-			// These four points define the absolute geometric boundaries regardless of P0/P1 storage.
-			
-			const minTime = Math.min(P0_cull.timestamp, P1_cull.timestamp);
-			const maxTime = Math.max(P0_cull.timestamp, P1_cull.timestamp);
-			const minPrice = Math.min(P0_cull.price, P1_cull.price);
-			const maxPrice = Math.max(P0_cull.price, P1_cull.price);
-
-			const P_TL: LineToolPoint = { timestamp: minTime, price: maxPrice };
-			const P_TR: LineToolPoint = { timestamp: maxTime, price: maxPrice };
-			const P_BR: LineToolPoint = { timestamp: maxTime, price: minPrice };
-			const P_BL: LineToolPoint = { timestamp: minTime, price: minPrice };
-
-			// The culler expects a single flat array of points to define the geometry.
-			// We pass the four corners.
-			const cullingPoints: LineToolPoint[] = [P_TL, P_TR, P_BR, P_BL];
-			
-			const cullingInfo: LineToolCullingInfo = {
-				// Check only the top (0->1) and bottom (2->3) edges for extension visibility
-				subSegments: [
-					[0, 1], // Top Edge (P_TL -> P_TR)
-					[3, 2]  // Bottom Edge (P_BL -> P_BR)
-				]
-			};
-
-			// Get the extension settings from the rectangle property
-			const extendOptions = options.priceRange.rectangle.extend;
-
-			// 4. Pass the stable array to the culling function (using the complex Rectangle logic)
-
-			/**
-			 * CULLING & VISIBILITY CHECK
-			 *
-			 * The Price Range tool can be inverted (P1 < P0). To ensure accurate culling:
-			 * 1. We calculate the absolute min/max Logical coordinates to form a stable bounding box.
-			 * 2. We define specific "Sub-Segments" (Top Edge and Bottom Edge) for the culler to check.
-			 *    This allows the tool to remain visible even if the corners are off-screen, provided
-			 *    an edge passes through the viewport.
-			 */
-			const cullingState = getToolCullingState(cullingPoints, tool, extendOptions, undefined, cullingInfo);
-
-			// 5. Apply Custom Culling Logic based on State and Extend Options
-			let shouldCull = false;
-
-			switch (cullingState) {
-
-				case OffScreenState.OffScreenTop:
-				case OffScreenState.OffScreenBottom:
-					// Vertical miss is a strong cull signal (no horizontal extension can save it)
-					shouldCull = true;
-					break;
-
-				case OffScreenState.OffScreenLeft:
-					// Tool is off-screen left. Only render if it extends infinitely to the right (extend.right is true)
-					if (extendOptions.right !== true) {
-						shouldCull = true;
-					}
-					break;
-
-				case OffScreenState.OffScreenRight:
-					// Tool is off-screen right. Only render if it extends infinitely to the left (extend.left is true)
-					if (extendOptions.left !== true) {
-						shouldCull = true;
-					}
-					break;
-
-				case OffScreenState.FullyOffScreen:
-					// Catch-all for disconnected tools
-					shouldCull = true;
-					break;
-
-				case OffScreenState.Visible:
-				default:
-					// Tool is visible or horizontally overlaps, proceed to render
-					shouldCull = false;
-					break;
-			}
-
-			if (shouldCull) {
-				// Stop rendering logic immediately and clear the renderer for efficiency.
-				//console.log('price range culled')
-				compositeRenderer.clear();
-				return;
-			}
-		}
+	
 
 		
 		// --- 2. Rectangle Body (Hit-Test and Background/Border) ---
