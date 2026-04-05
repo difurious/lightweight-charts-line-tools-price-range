@@ -90,9 +90,9 @@ export const PriceRangeOptionDefaults: LineToolOptionsInternal<'PriceRange'> = {
 			scale: 1,
 			padding: { x: 0, y: 0 },
 			maxHeight: 0, // Placeholder
-			shadow: { blur: 0, color: 'transparent', offset: { x: 0, y: 0 } },
-			border: { color: 'transparent', width: 0, radius: 0, highlight: false, style: LineStyle.Solid },
-			background: { color: 'transparent', inflation: { x: 0, y: 0 } },
+			shadow: { blur: 0, color: 'rgba(0,0,0,0)', offset: { x: 0, y: 0 } },
+			border: { color: 'rgba(0,0,0,0)', width: 0, radius: 0, highlight: false, style: LineStyle.Solid },
+			background: { color: 'rgba(0,0,0,0)', inflation: { x: 0, y: 0 } },
 		},
 	} as TextOptions, // Casting is fine here
 
