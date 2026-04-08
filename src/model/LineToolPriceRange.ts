@@ -411,6 +411,7 @@ export class LineToolPriceRange<HorzScaleItem> extends BaseLineTool<HorzScaleIte
 	 * @returns The constrained result.
 	 * @override
 	 */
+	/*
 	public override getShiftConstrainedPoint(
 		pointIndex: number,
 		rawScreenPoint: Point,
@@ -496,6 +497,52 @@ export class LineToolPriceRange<HorzScaleItem> extends BaseLineTool<HorzScaleIte
 			snapAxis: 'price',
 		};
 	}
+	*/
+
+	/**
+	 * Implements a Price-based Shift constraint specifically for the editing (resizing) phase.
+	 * 
+	 * When a user holds Shift while dragging any of the 8 anchors, the anchor is locked 
+	 * to its initial price level. This allows for precise horizontal adjustments of 
+	 * the range boundaries without accidental vertical movement.
+	 *
+	 * @param pointIndex - The index of the anchor handle being dragged.
+	 * @param rawScreenPoint - The current screen coordinates of the mouse.
+	 * @param phase - The current interaction phase (Creation, Editing, or Move).
+	 * @param originalLogicalPoint - The logical point snapshot from the start of the drag.
+	 * @param allOriginalLogicalPoints - Snapshot of all tool points at the start of the drag.
+	 * @returns A result containing the price-locked screen point and the 'price' axis hint.
+	 * @override
+	 */
+	public override getShiftConstrainedPoint(
+		pointIndex: number,
+		rawScreenPoint: Point,
+		phase: InteractionPhase,
+		originalLogicalPoint: LineToolPoint,
+		allOriginalLogicalPoints: LineToolPoint[]
+	): ConstraintResult {
+		// 1. Check the phase. We only want to apply the constraint during Editing (resizing).
+		// If we are in the Creation phase, we return the raw mouse point, 
+		// allowing the user to draw the initial box freely.
+		if (phase !== InteractionPhase.Editing) {
+			return { point: rawScreenPoint, snapAxis: 'none' };
+		}
+
+		// 2. Get the screen coordinate of the anchor being dragged BEFORE it moved.
+		// This coordinate represents the fixed Price level we want to stick to.
+		const originalScreenPoint = this.pointToScreenPoint(originalLogicalPoint);
+
+		if (!originalScreenPoint) {
+			return { point: rawScreenPoint, snapAxis: 'none' };
+		}
+
+		// 3. Final Constraint: Force the Y-coordinate to stay at the original position.
+		// We keep rawScreenPoint.x to allow the user to move the anchor left and right.
+		return {
+			point: new Point(rawScreenPoint.x, originalScreenPoint.y),
+			snapAxis: 'price',
+		};
+	}	
 	
 	/**
 	 * Performs the hit test for the Price Range tool.
